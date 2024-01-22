@@ -15,6 +15,7 @@ from typing import (
     DefaultDict,
     Generator,
     Iterator,
+    Union,
 )
 
 from ..environment import (
@@ -311,20 +312,28 @@ class SystemPath:
         self._register_finder("pyenv", pyenv_finder)
         return self
 
-    def get_path(self, path) -> PythonFinder | PathEntry:
+    def get_path(self, path: Union[str, Path]) -> Union[PythonFinder, PathEntry]:
         if path is None:
             raise TypeError("A path must be provided in order to generate a path entry.")
-        path = ensure_path(path)
+
+        # Convert path to pathlib.Path object if it's a string
+        path = Path(path) if isinstance(path, str) else path
+
+        # Try to get the PathEntry or PythonFinder from the paths dictionary
         _path = self.paths.get(path)
-        if not _path:
-            _path = self.paths.get(path.as_posix())
-        if not _path and path.as_posix() in self.path_order and path.exists():
+
+        # If not found, check if the path exists and is part of the path_order
+        if not _path and str(path) in self.path_order and path.exists():
             _path = PathEntry.create(
-                path=path.absolute(), is_root=True, only_python=self.only_python
+                path=path.resolve(),  # resolve() method will give the absolute path
+                is_root=True,
+                only_python=self.only_python
             )
-            self.paths[path.as_posix()] = _path
+            self.paths[str(path)] = _path  # Store the PathEntry or PythonFinder in paths
+
         if not _path:
             raise ValueError(f"Path not found or generated: {path!r}")
+
         return _path
 
     def _get_paths(self) -> Generator[PythonFinder | PathEntry, None, None]:
